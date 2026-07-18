@@ -104,39 +104,33 @@ async def handle_exception(_request: Request, exc: Exception):
     return _error(str(exc), status_code=400)
 
 
-@app.get("/health", response_model=ApiEnvelope, tags=["System"])
 @app.get("/api/health", response_model=ApiEnvelope, tags=["System"])
 def health():
     return _ok({"openai_configured": OPENAI.configured, "model": OPENAI.model})
 
 
-@app.get("/households", response_model=ApiEnvelope, tags=["Frozen Data"])
 @app.get("/api/households", response_model=ApiEnvelope, tags=["Frozen Data"])
 def list_households():
     return _ok({"households": DATA.list_households()})
 
 
-@app.get("/documents/match", response_model=ApiEnvelope, tags=["Profile"])
 @app.get("/api/documents/match", response_model=ApiEnvelope, tags=["Profile"])
 def match_document(file_name: str):
     doc = DATA.find_document(file_name=file_name)
     return _ok({"document": PROFILE.document_evidence(doc) if doc else None})
 
 
-@app.get("/households/assess", response_model=ApiEnvelope, tags=["Understand"])
 @app.get("/api/households/assess", response_model=ApiEnvelope, tags=["Understand"])
 def assess_household(household_id: str):
     return _ok(PROFILE.assess(household_id))
 
 
-@app.post("/sessions", response_model=ApiEnvelope, tags=["Session"])
 @app.post("/api/sessions", response_model=ApiEnvelope, tags=["Session"])
 def create_session():
     session = SESSIONS.create()
     return _ok({"session_id": session.session_id})
 
 
-@app.post("/sessions/attach-document", response_model=ApiEnvelope, tags=["Profile"])
 @app.post("/api/sessions/attach-document", response_model=ApiEnvelope, tags=["Profile"])
 def attach_document(payload: AttachDocumentRequest):
     session = SESSIONS.get(payload.session_id)
@@ -148,7 +142,6 @@ def attach_document(payload: AttachDocumentRequest):
     return _ok({"session_id": session.session_id, "document": evidence})
 
 
-@app.post("/sessions/confirm-field", response_model=ApiEnvelope, tags=["Profile"])
 @app.post("/api/sessions/confirm-field", response_model=ApiEnvelope, tags=["Profile"])
 def confirm_field(payload: ConfirmFieldRequest):
     session = SESSIONS.get(payload.session_id)
@@ -157,7 +150,6 @@ def confirm_field(payload: ConfirmFieldRequest):
     return _ok({"confirmation": confirmation, "assessment": packet["assessment"]})
 
 
-@app.post("/sessions/packet", response_model=ApiEnvelope, tags=["Prepare"])
 @app.post("/api/sessions/packet", response_model=ApiEnvelope, tags=["Prepare"])
 def packet(payload: SessionRequest):
     return _ok(PROFILE.packet(SESSIONS.get(payload.session_id)))
@@ -206,14 +198,12 @@ def record_consent(payload: ConsentRequest):
     return _ok({"event": PROFILE.record_consent(session, payload.consent_type, payload.granted)})
 
 
-@app.post("/sessions/delete", response_model=ApiEnvelope, tags=["Session"])
 @app.post("/api/sessions/delete", response_model=ApiEnvelope, tags=["Session"])
 def delete_session(payload: SessionRequest):
     SESSIONS.delete(payload.session_id)
     return _ok({"deleted": True})
 
 
-@app.post("/copilot", response_model=ApiEnvelope, tags=["Copilot"])
 @app.post("/api/copilot", response_model=ApiEnvelope, tags=["Copilot"])
 def copilot(payload: CopilotRequest):
     safety = assess_request_safety(payload.message)
@@ -321,7 +311,7 @@ def _session_household(session_id: str | None) -> str | None:
 
 
 def run(host: str = "127.0.0.1", port: int = 8000):
-    uvicorn.run("src.api_server:app", host=host, port=port, reload=False)
+    uvicorn.run("src.api_server:app", host=host, port=port, reload=True)
 
 
 if __name__ == "__main__":

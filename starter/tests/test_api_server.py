@@ -21,6 +21,10 @@ class ApiServerTests(unittest.TestCase):
         self.assertTrue(body["ok"])
         self.assertIn("model", body["data"])
 
+    def test_legacy_routes_are_not_registered(self):
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 404)
+
     def test_assess_household(self):
         response = self.client.get("/api/households/assess", params={"household_id": "HH-001"})
         self.assertEqual(response.status_code, 200)

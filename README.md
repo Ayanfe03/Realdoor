@@ -207,7 +207,7 @@ Main endpoints:
 - `POST /api/rules/answer`
 - `POST /api/copilot`
 
-The older non-`/api` routes currently remain as compatibility aliases for early manual testing.
+All backend routes are namespaced under `/api` except FastAPI's generated docs and OpenAPI routes.
 
 Current privacy posture:
 
