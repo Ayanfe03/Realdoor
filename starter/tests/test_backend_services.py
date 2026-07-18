@@ -30,6 +30,11 @@ class BackendServiceTests(unittest.TestCase):
         self.assertNotIn("untrusted_instruction_text", field_names)
         self.assertIn("gross_pay", field_names)
 
+    def test_extraction_preview_by_document_id(self):
+        preview = self.profile.extraction_preview(document_id="HH-001-D02")
+        self.assertEqual(preview["mode"], "gold_fixture")
+        self.assertEqual(preview["document"]["document_id"], "HH-001-D02")
+
     def test_correction_updates_downstream_assessment(self):
         sessions = SessionStore()
         session = sessions.create()
@@ -38,6 +43,7 @@ class BackendServiceTests(unittest.TestCase):
         self.profile.confirm_field(session, "HH-001-D02", "gross_pay", 1000)
         packet = self.profile.packet(session)
         self.assertEqual(packet["assessment"]["annualized_income"], 26000)
+        self.assertGreaterEqual(len(packet["action_log"]), 3)
 
     def test_safety_blocks_decisioning(self):
         result = assess_request_safety("Can you approve this renter?")

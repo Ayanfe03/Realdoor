@@ -189,16 +189,33 @@ http://127.0.0.1:8000/docs
 
 Main endpoints:
 
-- `GET /health`
-- `GET /households`
-- `GET /documents/match?file_name=hh-001_d02_pay_stub.pdf`
-- `GET /households/assess?household_id=HH-001`
-- `POST /sessions`
-- `POST /sessions/attach-document`
-- `POST /sessions/confirm-field`
-- `POST /sessions/packet`
-- `POST /sessions/delete`
-- `POST /copilot`
+- `GET /api/health`
+- `GET /api/households`
+- `GET /api/documents/match?file_name=hh-001_d02_pay_stub.pdf`
+- `GET /api/households/assess?household_id=HH-001`
+- `POST /api/sessions`
+- `POST /api/sessions/attach-document`
+- `POST /api/sessions/confirm-field`
+- `POST /api/sessions/packet`
+- `POST /api/sessions/export`
+- `POST /api/sessions/export-file`
+- `POST /api/sessions/summary`
+- `POST /api/sessions/consent`
+- `POST /api/sessions/delete`
+- `POST /api/extraction/preview`
+- `POST /api/extraction/upload`
+- `POST /api/rules/answer`
+- `POST /api/copilot`
+
+The older non-`/api` routes currently remain as compatibility aliases for early manual testing.
+
+Current privacy posture:
+
+- Session/action logs are in-memory and metadata-only.
+- Logs include action type, timestamp, frozen rule version, and minimal details such as document ID or field name.
+- Raw document text is not sent to persistent storage by this backend.
+- External observability/tracing such as Supabase or Arize is intentionally not enabled for MVP because the challenge emphasizes minimal retention and renter privacy.
+- If observability is added later, redact raw document text, extracted values, names, addresses, and model prompts before export.
 
 ## Data Flow For Implementation
 

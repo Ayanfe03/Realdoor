@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from .calculate import annualize, compare_to_threshold
@@ -12,7 +12,9 @@ class SessionState:
     session_id: str
     household_id: str | None = None
     document_ids: list[str] = field(default_factory=list)
+    extracted_documents: dict[str, dict] = field(default_factory=dict)
     confirmations: dict[str, dict] = field(default_factory=dict)
+    actions: list[dict] = field(default_factory=list)
     deleted: bool = False
 
 
@@ -22,6 +24,7 @@ class SessionStore:
 
     def create(self) -> SessionState:
         session = SessionState(session_id=str(uuid4()))
+        session.actions.append(_action("session_created"))
         self._sessions[session.session_id] = session
         return session
 
@@ -32,7 +35,9 @@ class SessionStore:
 
     def delete(self, session_id: str) -> None:
         session = self.get(session_id)
+        session.actions.append(_action("session_deleted"))
         session.document_ids.clear()
+        session.extracted_documents.clear()
         session.confirmations.clear()
         session.household_id = None
         session.deleted = True
@@ -46,10 +51,11 @@ class ProfileService:
         return {
             **{key: doc[key] for key in ("document_id", "household_id", "document_type", "file_name")},
             "contains_adversarial_text": doc.get("contains_adversarial_text", False),
+            "model_generated": doc.get("model_generated", False),
             "fields": [
                 {
                     **field,
-                    "confidence": 1.0,
+                    "confidence": field.get("confidence", 1.0),
                     "confirmed": False,
                     "source": {
                         "document_id": doc["document_id"],
@@ -62,6 +68,31 @@ class ProfileService:
             ],
         }
 
+    def extraction_preview(
+        self,
+        *,
+        file_name: str | None = None,
+        document_id: str | None = None,
+        text: str | None = None,
+        openai_client=None,
+    ) -> dict:
+        doc = self.store.find_document(file_name=file_name, document_id=document_id)
+        if doc:
+            return {
+                "mode": "gold_fixture",
+                "document": self.document_evidence(doc),
+                "model_result": None,
+                "note": "Matched the synthetic document against the frozen gold extraction set.",
+            }
+        if text and openai_client:
+            return {
+                "mode": "model_structured_preview",
+                "document": None,
+                "model_result": openai_client.extract_fields(text),
+                "note": "Model output must still be confirmed by the renter before reuse.",
+            }
+        raise ValueError("Provide a known synthetic file/document ID, or provide text for model extraction preview")
+
     def attach_document(self, session: SessionState, *, file_name: str | None = None, document_id: str | None = None) -> dict:
         doc = self.store.find_document(file_name=file_name, document_id=document_id)
         if not doc:
@@ -71,11 +102,19 @@ class ProfileService:
         session.household_id = doc["household_id"]
         if doc["document_id"] not in session.document_ids:
             session.document_ids.append(doc["document_id"])
+            session.actions.append(
+                _action(
+                    "document_attached",
+                    document_id=doc["document_id"],
+                    document_type=doc["document_type"],
+                    file_name=doc["file_name"],
+                )
+            )
         return self.document_evidence(doc)
 
     def confirm_field(self, session: SessionState, document_id: str, field_name: str, value) -> dict:
-        doc = self.store.documents_by_id[document_id]
-        if document_id not in session.document_ids:
+        doc = self._session_document(session, document_id)
+        if document_id not in session.document_ids and document_id not in session.extracted_documents:
             raise ValueError("Document is not attached to this session")
         original = next((item for item in doc["fields"] if item["field"] == field_name), None)
         if not original or field_name == "untrusted_instruction_text":
@@ -94,21 +133,62 @@ class ProfileService:
                 "bbox_units": original["bbox_units"],
             },
         }
+        session.actions.append(
+            _action(
+                "field_confirmed",
+                document_id=document_id,
+                field=field_name,
+                corrected=session.confirmations[key]["corrected"],
+            )
+        )
         return session.confirmations[key]
 
+    def add_extracted_document(self, session: SessionState, extraction: dict, household_id: str | None = None) -> dict:
+        doc = extraction["document"]
+        doc["household_id"] = household_id or session.household_id or doc.get("household_id") or "UNCONFIRMED"
+        if session.household_id and doc["household_id"] not in {session.household_id, "UNCONFIRMED"}:
+            raise ValueError("A session can only contain documents for one household")
+        if doc["household_id"] != "UNCONFIRMED":
+            session.household_id = doc["household_id"]
+        for field in doc["fields"]:
+            field["source"]["document_id"] = doc["document_id"]
+        session.extracted_documents[doc["document_id"]] = doc
+        session.actions.append(
+            _action(
+                "ai_extraction_added",
+                document_id=doc["document_id"],
+                document_type=doc["document_type"],
+                field_count=len(doc["fields"]),
+                abstention_count=len(extraction.get("abstentions", [])),
+            )
+        )
+        return self.document_evidence(doc)
+
     def packet(self, session: SessionState) -> dict:
+        if not session.household_id:
+            session.household_id = self._infer_household_id(session)
         if not session.household_id:
             raise ValueError("No household documents are attached")
         assessment = self.assess(session.household_id, confirmations=session.confirmations)
         docs = [self.store.documents_by_id[doc_id] for doc_id in session.document_ids]
+        docs.extend(session.extracted_documents.values())
         return {
             "session_id": session.session_id,
             "household_id": session.household_id,
             "documents": [self.document_evidence(doc) for doc in docs],
             "confirmations": list(session.confirmations.values()),
+            "action_log": session.actions,
             "assessment": assessment,
             "decision_boundary": "No eligibility determination is included. A qualified human decides.",
         }
+
+    def record_export(self, session: SessionState, export_type: str) -> None:
+        session.actions.append(_action("packet_exported", export_type=export_type))
+
+    def record_consent(self, session: SessionState, consent_type: str, granted: bool) -> dict:
+        event = _action("consent_recorded", consent_type=consent_type, granted=granted)
+        session.actions.append(event)
+        return event
 
     def assess(self, household_id: str, confirmations: dict[str, dict] | None = None) -> dict:
         confirmations = confirmations or {}
@@ -186,3 +266,25 @@ class ProfileService:
                 if field["field"] == field_name:
                     return field["value"]
         return fallback
+
+    def _session_document(self, session: SessionState, document_id: str) -> dict:
+        if document_id in session.extracted_documents:
+            return session.extracted_documents[document_id]
+        return self.store.documents_by_id[document_id]
+
+    def _infer_household_id(self, session: SessionState) -> str | None:
+        for doc_id in session.document_ids:
+            return self.store.documents_by_id[doc_id]["household_id"]
+        for doc in session.extracted_documents.values():
+            if doc.get("household_id") and doc["household_id"] != "UNCONFIRMED":
+                return doc["household_id"]
+        return None
+
+
+def _action(action_type: str, **details) -> dict:
+    return {
+        "action": action_type,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "rule_version": EVENT_DATE,
+        "details": details,
+    }

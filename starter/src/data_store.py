@@ -60,6 +60,12 @@ class DataStore:
         with path.open(encoding="utf-8") as f:
             return [json.loads(line) for line in f if line.strip()]
 
+    @cached_property
+    def qa_gold(self) -> list[dict]:
+        path = self.root / "evaluation" / "qa_gold.jsonl"
+        with path.open(encoding="utf-8") as f:
+            return [json.loads(line) for line in f if line.strip()]
+
     def find_document(self, *, file_name: str | None = None, document_id: str | None = None) -> dict | None:
         if document_id:
             return self.documents_by_id.get(document_id)

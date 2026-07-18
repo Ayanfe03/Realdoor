@@ -3,3 +3,5 @@ uvicorn
 pytest
 httpx
 python-dotenv
+python-multipart
+pymupdf
