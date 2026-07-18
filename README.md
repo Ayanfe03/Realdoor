@@ -156,6 +156,50 @@ python -m unittest discover -s tests -v
 
 Observed result during initial pass: 8 tests passed.
 
+## Backend Implementation Notes
+
+The backend lives in `starter/src` and uses FastAPI for the HTTP API and Swagger docs.
+
+Environment variables expected at repo root in `.env`:
+
+```env
+OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=gpt-5.6-terra
+```
+
+Do not commit `.env`.
+
+Run tests from `starter/`:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Run the backend from `starter/`:
+
+```powershell
+python -m src.api_server
+```
+
+Open Swagger after the backend starts:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Main endpoints:
+
+- `GET /health`
+- `GET /households`
+- `GET /documents/match?file_name=hh-001_d02_pay_stub.pdf`
+- `GET /households/assess?household_id=HH-001`
+- `POST /sessions`
+- `POST /sessions/attach-document`
+- `POST /sessions/confirm-field`
+- `POST /sessions/packet`
+- `POST /sessions/delete`
+- `POST /copilot`
+
 ## Data Flow For Implementation
 
 1. User uploads a synthetic PDF.
