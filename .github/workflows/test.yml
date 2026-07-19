@@ -2,9 +2,9 @@ name: Python Test Suite
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, core ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, core ]
 
 jobs:
   test:
