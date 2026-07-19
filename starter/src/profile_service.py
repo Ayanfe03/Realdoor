@@ -222,40 +222,62 @@ class ProfileService:
 
     def _annualized_income(self, docs: list[dict], confirmations: dict[str, dict]) -> dict:
         pay_docs = [doc for doc in docs if doc["document_type"] == "pay_stub"]
+        if not pay_docs:
+            return {"annualized_income": 0, "income_sources": []}
+            
         latest_pay = max(pay_docs, key=lambda doc: self._field_value([doc], confirmations, "pay_date", fallback="0000-00-00"))
-        gross = float(self._field_value([latest_pay], confirmations, "gross_pay", fallback=0))
-        frequency = self._field_value([latest_pay], confirmations, "pay_frequency", fallback="annual")
-        hourly = self._field_value([latest_pay], confirmations, "hourly_rate", fallback=None)
-        hours = self._field_value([latest_pay], confirmations, "regular_hours", fallback=None)
-        gross_confirmed = f"{latest_pay['document_id']}:gross_pay" in confirmations
+        
+        # 1. Force find any user confirmation matching gross_pay across all session keys
+        confirmed_gross_val = None
+        for key, conf in confirmations.items():
+            if "gross" in key.lower() and "pay" in key.lower():
+                confirmed_gross_val = float(conf["value"])
+                break
+
+        # 2. Extract values with explicit fallbacks
+        gross = confirmed_gross_val if confirmed_gross_val is not None else float(self._field_value([latest_pay], confirmations, "gross_pay", fallback=0))
+        frequency = self._field_value([latest_pay], confirmations, "pay_frequency", fallback="biweekly") 
+        
         sources = []
-        if (
-            not gross_confirmed
-            and hourly is not None
-            and hours is not None
-            and round(float(hourly) * float(hours), 2) != round(gross, 2)
-        ):
-            letter = next((doc for doc in docs if doc["document_type"] == "employment_letter"), None)
-            if letter:
-                weekly_hours = float(self._field_value([letter], confirmations, "weekly_hours", fallback=hours))
-                letter_rate = float(self._field_value([letter], confirmations, "hourly_rate", fallback=hourly))
-                gross = round(weekly_hours * letter_rate, 2)
-                frequency = "weekly"
+
+        # 3. IF THE USER CONFIRMED IT, BYPASS ALL EMPLOYMENT LETTER OVERRIDES ENTIRELY
+        if confirmed_gross_val is None:
+            hourly = self._field_value([latest_pay], confirmations, "hourly_rate", fallback=None)
+            hours = self._field_value([latest_pay], confirmations, "regular_hours", fallback=None)
+            if (
+                hourly is not None
+                and hours is not None
+                and round(float(hourly) * float(hours), 2) != round(gross, 2)
+            ):
+                letter = next((doc for doc in docs if doc["document_type"] == "employment_letter"), None)
+                if letter:
+                    weekly_hours = float(self._field_value([letter], confirmations, "weekly_hours", fallback=hours))
+                    letter_rate = float(self._field_value([letter], confirmations, "hourly_rate", fallback=hourly))
+                    gross = round(weekly_hours * letter_rate, 2)
+                    frequency = "weekly"
+
+        # 4. Compute wage math
         pay_annual = annualize(gross, frequency)
         sources.append({"kind": "wages", "amount": gross, "frequency": frequency, "annualized": pay_annual})
         total = pay_annual
+
+        # 5. Process secondary benefits cleanly
         for benefit_doc in [doc for doc in docs if doc["document_type"] == "benefit_letter"]:
             amount = float(self._field_value([benefit_doc], confirmations, "monthly_benefit", fallback=0))
             freq = self._field_value([benefit_doc], confirmations, "benefit_frequency", fallback="monthly")
             annual = annualize(amount, freq)
             total += annual
             sources.append({"kind": "benefit", "amount": amount, "frequency": freq, "annualized": annual})
+
         for gig_doc in [doc for doc in docs if doc["document_type"] == "gig_statement"]:
             amount = float(self._field_value([gig_doc], confirmations, "gross_receipts", fallback=0))
             annual = annualize(amount, "monthly")
             total += annual
             sources.append({"kind": "gig_receipts", "amount": amount, "frequency": "monthly", "annualized": annual})
+
         return {"annualized_income": round(total, 2), "income_sources": sources}
+
+
 
     def _field_value(self, docs: list[dict], confirmations: dict[str, dict], field_name: str, fallback=None):
         for doc in docs:

@@ -145,8 +145,17 @@ def attach_document(payload: AttachDocumentRequest):
 @app.post("/api/sessions/confirm-field", response_model=ApiEnvelope, tags=["Profile"])
 def confirm_field(payload: ConfirmFieldRequest):
     session = SESSIONS.get(payload.session_id)
+
+    print("=== BEFORE CONFIRM ===")
+    print("Current assessment:", PROFILE.packet(session)["assessment"]["annualized_income"])
+    print("Income sources:", PROFILE.packet(session)["assessment"]["income_sources"])
+    print("Confirming field:", payload.field, "with value:", payload.value)
     confirmation = PROFILE.confirm_field(session, payload.document_id, payload.field, payload.value)
+    
+    print("=== AFTER CONFIRM ===")
     packet = PROFILE.packet(session)
+    print("New assessment:", packet["assessment"]["annualized_income"])
+    print("Income sources:", packet["assessment"]["income_sources"])
     return _ok({"confirmation": confirmation, "assessment": packet["assessment"]})
 
 

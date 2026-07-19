@@ -67,3 +67,7 @@ data/
 participant-guide/
 synthetic_documents/documents/
 governance/
+
+#architecture
+BACKEND_ARCHITECTURE.md
+PROJECT_ARCHITECTURE.md
