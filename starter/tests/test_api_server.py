@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi.testclient import TestClient
 
@@ -134,7 +134,7 @@ class ApiServerTests(unittest.TestCase):
 
     def test_upload_known_synthetic_pdf_uses_gold_without_model(self):
         session_id = self.client.post("/api/sessions").json()["data"]["session_id"]
-        pdf_path = Path(__file__).parents[2] / "synthetic_documents" / "documents" / "hh-001_d02_pay_stub.pdf"
+        pdf_path = Path(__file__).resolve().parent.parent / "synthetic_documents" / "documents" / "hh-001_d02_pay_stub.pdf"
         with pdf_path.open("rb") as f:
             response = self.client.post(
                 "/api/extraction/upload",

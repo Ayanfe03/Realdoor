@@ -16,7 +16,8 @@ from .rule_service import RuleService
 from .safety import assess_request_safety
 
 
-ROOT = Path(__file__).parents[2]
+#  AFTER: (Forces data lookups to remain inside the starter root context)
+ROOT = Path(__file__).resolve().parent.parent
 DATA = DataStore(ROOT)
 SESSIONS = SessionStore()
 PROFILE = ProfileService(DATA)

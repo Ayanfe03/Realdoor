@@ -12,7 +12,7 @@ from src.safety import assess_request_safety
 class BackendServiceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.root = Path(__file__).parents[2]
+        cls.root = ROOT = Path(__file__).resolve().parent.parent
         cls.data = DataStore(cls.root)
         cls.profile = ProfileService(cls.data)
 

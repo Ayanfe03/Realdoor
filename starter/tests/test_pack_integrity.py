@@ -1,12 +1,12 @@
 import sys, unittest
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.load_documents import load_gold, validate_boxes
 from src.rules import load_rules
 
 class PackIntegrityTests(unittest.TestCase):
     @classmethod
-    def setUpClass(cls): cls.root = Path(__file__).parents[2]
+    def setUpClass(cls): cls.root = Path(__file__).resolve().parent.parent
     def test_document_count(self):
         rows = load_gold(self.root / "synthetic_documents/gold/document_gold.jsonl")
         self.assertGreaterEqual(len(rows), 20); self.assertLessEqual(len(rows), 40)
